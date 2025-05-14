@@ -12,12 +12,31 @@ from joblib import load
 import pyautogui
 import math
 import time
+import os # Thêm os để làm việc với đường dẫn file
 
+# Import pygame
+import pygame
 class EyeTrackingControlApp(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Eye Tracking Control Interface")
 
+        # Khởi tạo pygame mixer (chỉ một lần)
+        try:
+            pygame.mixer.init()
+            self.pygame_mixer_initialized = True
+            print("Pygame mixer initialized successfully.")
+        except pygame.error as e:
+            self.pygame_mixer_initialized = False
+            print(f"Error initializing pygame mixer: {e}")
+            QMessageBox.warning(self, "Lỗi Mixer", 
+                                "Không thể khởi tạo trình phát nhạc (pygame.mixer).\n"
+                                "Chức năng phát nhạc có thể không hoạt động.")
+
+        # Đường dẫn đến file nhạc của bạn
+        # THAY ĐỔI "path/to/your/music.mp3" THÀNH ĐƯỜNG DẪN THỰC TẾ
+        self.music_file_path = "Let Her Go.mp3"
+        
         self.init_eye_tracking()
         
         # Initialize camera
@@ -199,13 +218,21 @@ class EyeTrackingControlApp(QMainWindow):
     def setup_interaction_zones(self):
         """Define the interaction zones and their actions"""
         # Define zones - format: (name, action_callback, color)
+        # self.zones = [
+        #     ("Gọi người chăm sóc", self.call_caretaker, QColor("#ef5350")),  # đỏ nhạt
+        #     ("Bật nhạc", self.play_music, QColor("#66bb6a")),                # xanh lá
+        #     ("Đọc sách", self.read_book, QColor("#42a5f5")),                 # xanh dương
+        #     ("SOS", self.emergency, QColor("#d32f2f")),                      # đỏ đậm
+        #     ("", None, QColor("#424242")),                                   # xám
+        #     ("", None, QColor("#424242")),                                   # xám
+        # ]
         self.zones = [
-            ("Gọi người chăm sóc", self.call_caretaker, QColor("#ef5350")),  # đỏ nhạt
-            ("Bật nhạc", self.play_music, QColor("#66bb6a")),                # xanh lá
-            ("Đọc sách", self.read_book, QColor("#42a5f5")),                 # xanh dương
-            ("SOS", self.emergency, QColor("#d32f2f")),                      # đỏ đậm
-            ("", None, QColor("#424242")),                                   # xám
-            ("", None, QColor("#424242")),                                   # xám
+            ("Gọi người chăm sóc", self.call_caretaker, QColor("#ef5350")),
+            ("Bật nhạc", self.play_music, QColor("#66bb6a")),
+            ("Đọc sách", self.read_book, QColor("#42a5f5")),
+            ("SOS", self.emergency, QColor("#d32f2f")),
+            ("Dừng nhạc", self.stop_music, QColor("#ffca28")), # Thêm nút dừng nhạc (màu vàng)
+            ("", None, QColor("#424242")),
         ]
 
         
@@ -219,9 +246,15 @@ class EyeTrackingControlApp(QMainWindow):
         window_height = self.height()
 
         # Zone size
-        zone_width = (window_width - 40) // 3
-        zone_height = (window_height - 40) // 2
+        # zone_width = (window_width - 40) // 3
+        # zone_height = (window_height - 40) // 2
+        num_zones = len(self.zones)
+        cols = 3 # Số cột mong muốn
+        rows = (num_zones + cols - 1) // cols # Tính số hàng cần thiết
 
+        # Tính toán kích thước vùng dựa trên số hàng và cột
+        zone_width = (window_width - (cols + 1) * 10) // cols
+        zone_height = (window_height - (rows + 1) * 10) // rows
         self.zone_rects = []
 
         for i, (name, _, color) in enumerate(self.zones):
@@ -576,28 +609,144 @@ class EyeTrackingControlApp(QMainWindow):
         self.debug_label.setText(debug_text)
         
     # Zone action callbacks
+    # def call_caretaker(self):
+    #     """Action for 'Gọi người chăm sóc' zone"""
+    #     QMessageBox.information(self, "Thông báo", "Đã gọi người chăm sóc!")
+    #     # Reset zone activation after a short delay
+    #     QTimer.singleShot(500, self.reset_zone_activation)
+        
+    # def play_music(self):
+    #     """Action for 'Bật nhạc' zone"""
+    #     QMessageBox.information(self, "Thông báo", "Đang bật nhạc!")
+    #     # Reset zone activation after a short delay
+    #     QTimer.singleShot(500, self.reset_zone_activation)
+        
+    # def read_book(self):
+    #     """Action for 'Đọc sách' zone"""
+    #     QMessageBox.information(self, "Thông báo", "Mở ứng dụng đọc sách!")
+    #     # Reset zone activation after a short delay
+    #     QTimer.singleShot(500, self.reset_zone_activation)
+        
+    # def emergency(self):
+    #     """Action for 'SOS' zone"""
+    #     QMessageBox.critical(self, "KHẨN CẤP", "ĐÃ GỬI TÍN HIỆU KHẨN CẤP!")
+    #     # Reset zone activation after a short delay
+    #     QTimer.singleShot(500, self.reset_zone_activation)
+    
     def call_caretaker(self):
         """Action for 'Gọi người chăm sóc' zone"""
-        QMessageBox.information(self, "Thông báo", "Đã gọi người chăm sóc!")
-        # Reset zone activation after a short delay
+        trigger_x = int(self.screen_gaze_x) # Đảm bảo self.screen_gaze_x có giá trị số
+        trigger_y = int(self.screen_gaze_y) # Đảm bảo self.screen_gaze_y có giá trị số
+        
+        # In ra để kiểm tra giá trị
+        print(f"DEBUG: call_caretaker triggered. Coords: ({trigger_x}, {trigger_y})")
+
+        # Tạo chuỗi message
+        message_content = f"Đã gọi người chăm sóc!\nKích hoạt tại tọa độ màn hình: ({trigger_x}, {trigger_y})"
+        
+        # In ra để kiểm tra nội dung message
+        print(f"DEBUG: Message content is: '{message_content}'")
+
+        # Kiểm tra xem message_content có rỗng không
+        if not message_content:
+            print("ERROR: Message content is EMPTY!")
+            message_content = "LỖI: Nội dung thông báo rỗng!" # Thông báo mặc định nếu rỗng
+
+        QMessageBox.information(self, "Thông báo", message_content)
+        
+        print(f"Hành động 'Gọi người chăm sóc' được kích hoạt tại ({trigger_x}, {trigger_y}).")
         QTimer.singleShot(500, self.reset_zone_activation)
         
     def play_music(self):
-        """Action for 'Bật nhạc' zone"""
-        QMessageBox.information(self, "Thông báo", "Đang bật nhạc!")
-        # Reset zone activation after a short delay
-        QTimer.singleShot(500, self.reset_zone_activation)
+        """Hành động cho vùng 'Bật nhạc'"""
+        if not self.pygame_mixer_initialized:
+            QMessageBox.warning(self, "Lỗi nhạc", "Trình phát nhạc chưa được khởi tạo.")
+            QTimer.singleShot(500, self.reset_zone_activation)
+            return
+
+        trigger_x = int(self.screen_gaze_x)
+        trigger_y = int(self.screen_gaze_y)
+        
+        try:
+            if not os.path.exists(self.music_file_path):
+                QMessageBox.critical(self, "Lỗi file nhạc", f"Không tìm thấy file nhạc:\n{self.music_file_path}")
+                QTimer.singleShot(500, self.reset_zone_activation)
+                return
+
+            if pygame.mixer.music.get_busy():
+                # Nếu nhạc đang phát, có thể chọn dừng hoặc thông báo
+                pygame.mixer.music.stop() # Dừng nhạc cũ để phát lại từ đầu
+                # pygame.mixer.music.unload() # Cân nhắc unload nếu muốn giải phóng bộ nhớ
+                print("Music was playing, stopped it to replay.")
+            
+            pygame.mixer.music.load(self.music_file_path)
+            pygame.mixer.music.play() # Mặc định play 1 lần, dùng play(-1) để lặp vô hạn
+            
+            song_name = os.path.basename(self.music_file_path)
+            message = f"Đang phát: {song_name}\nKích hoạt tại: ({trigger_x}, {trigger_y})"
+            QMessageBox.information(self, "Bật nhạc", message)
+            print(f"Playing music: {self.music_file_path}")
+
+        except pygame.error as e:
+            QMessageBox.critical(self, "Lỗi phát nhạc", f"Lỗi Pygame Mixer: {e}")
+            print(f"Pygame mixer error: {e}")
+        except Exception as e:
+            QMessageBox.critical(self, "Lỗi không xác định", f"Lỗi khi bật nhạc: {e}")
+            print(f"Unexpected error in play_music: {e}")
+            
+        QTimer.singleShot(1000, self.reset_zone_activation) # Tăng thời gian reset
+
+
+    def stop_music(self):
+        """Hành động cho vùng 'Dừng nhạc'"""
+        if not self.pygame_mixer_initialized:
+            QMessageBox.warning(self, "Lỗi nhạc", "Trình phát nhạc chưa được khởi tạo.")
+            QTimer.singleShot(500, self.reset_zone_activation)
+            return
+
+        trigger_x = int(self.screen_gaze_x)
+        trigger_y = int(self.screen_gaze_y)
+
+        if pygame.mixer.music.get_busy():
+            pygame.mixer.music.stop()
+            # pygame.mixer.music.unload() # Cân nhắc unload nếu muốn giải phóng hoàn toàn
+            message = f"Đã dừng nhạc.\nKích hoạt tại: ({trigger_x}, {trigger_y})"
+            QMessageBox.information(self, "Dừng nhạc", message)
+            print("Music stopped.")
+        else:
+            message = f"Không có nhạc nào đang phát.\nTại: ({trigger_x}, {trigger_y})"
+            QMessageBox.information(self, "Dừng nhạc", message)
+            print("No music was playing.")
+        
+        QTimer.singleShot(1000, self.reset_zone_activation)
         
     def read_book(self):
-        """Action for 'Đọc sách' zone"""
-        QMessageBox.information(self, "Thông báo", "Mở ứng dụng đọc sách!")
-        # Reset zone activation after a short delay
+        """Hành động cho vùng 'Đọc sách'"""
+        trigger_x = int(self.screen_gaze_x)
+        trigger_y = int(self.screen_gaze_y)
+
+        message = f"Mở ứng dụng đọc sách!\nKích hoạt tại tọa độ màn hình: ({trigger_x}, {trigger_y})"
+        QMessageBox.information(self, "Thông báo", message)
+        
+        print(f"Hành động 'Đọc sách' được kích hoạt tại ({trigger_x}, {trigger_y}).")
+        # Ví dụ: mở một cuốn sách cụ thể hoặc một trang dựa trên tọa độ
+        # open_reading_app_to_page(book_id, page_based_on_coords)
+
         QTimer.singleShot(500, self.reset_zone_activation)
         
     def emergency(self):
-        """Action for 'SOS' zone"""
-        QMessageBox.critical(self, "KHẨN CẤP", "ĐÃ GỬI TÍN HIỆU KHẨN CẤP!")
-        # Reset zone activation after a short delay
+        """Hành động cho vùng 'SOS'"""
+        trigger_x = int(self.screen_gaze_x)
+        trigger_y = int(self.screen_gaze_y)
+
+        message = f"ĐÃ GỬI TÍN HIỆU KHẨN CẤP!\nKích hoạt tại tọa độ màn hình: ({trigger_x}, {trigger_y})"
+        QMessageBox.critical(self, "KHẨN CẤP", message)
+        
+        print(f"Hành động 'SOS' được kích hoạt tại ({trigger_x}, {trigger_y}).")
+        # Gửi tín hiệu SOS, có thể kèm theo thông tin vị trí nếu có
+        # (lưu ý: screen_gaze_x/y là tọa độ trên màn hình, không phải vị trí địa lý)
+        # send_sos_signal(additional_info={"trigger_coords": (trigger_x, trigger_y)})
+
         QTimer.singleShot(500, self.reset_zone_activation)
     
     def reset_zone_activation(self):
