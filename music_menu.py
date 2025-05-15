@@ -1,7 +1,7 @@
 # music_menu.py
 from PyQt5.QtWidgets import QWidget, QLabel
 from PyQt5.QtCore import Qt, QRect, QTimer, pyqtSignal
-from PyQt5.QtGui import QFont, QColor, QPainter, QPen, QLinearGradient, QPalette
+from PyQt5.QtGui import QFont, QColor, QPainter, QPen, QLinearGradient, QPalette, QPixmap
 import time
 import math # Thêm math để tính toán số trang
 
@@ -75,179 +75,153 @@ class MusicMenuWidget(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
         w, h = self.width(), self.height()
-        self.zones = [] # Reset zones mỗi lần vẽ
-        
-        margin = 20
-        
-        # --- 1. Nút Back to Home (Trên cùng, kéo dài hết chiều ngang) ---
-        top_bar_height = int(h * 0.1)
-        back_button_rect = QRect(0, 0, w, top_bar_height)
-        self.zones.append(("nav_home_music", back_button_rect))
-        
-        # Vẽ nút Back
-        is_hovered_back = back_button_rect.contains(self.gaze_x, self.gaze_y)
-        back_color = QColor("#3498DB").lighter(120) if is_hovered_back else QColor("#3498DB")
-        painter.fillRect(back_button_rect, back_color)
-        painter.setPen(QPen(back_color.darker(120), 2))
-        painter.drawRect(back_button_rect)
-        painter.setPen(Qt.white)
-        font_back = QFont("Arial", 16, QFont.Bold)
-        painter.setFont(font_back)
-        painter.drawText(back_button_rect, Qt.AlignCenter, "⬅ Về Trang Chủ")
+        self.zones = []
+        margin = 30
 
-        content_y_start = top_bar_height + margin
+        # === Load ảnh ===
+        back_icon = QPixmap("assets/home_icon.png")
+        left_icon = QPixmap("assets/left_arrow.png")
+        right_icon = QPixmap("assets/right_arrow.png")
+        music_icon = QPixmap("assets/music_icon.png")
+        play_icon = QPixmap("assets/play_icon.png")
+        pause_icon = QPixmap("assets/pause_icon.png")
+        play_hover = QPixmap("assets/play_hover.png")
+        pause_hover = QPixmap("assets/pause_hover.png")
 
-        # --- 2. Nút Chuyển Trang (Hai bên, kéo dài hết chiều cao còn lại) ---
-        side_button_width = int(w * 0.2) # Giảm chiều rộng nút bên
-        side_button_height = h - content_y_start
-        
-        # Nút Previous Page (Bên trái)
-        prev_page_rect = QRect(0, content_y_start, side_button_width, side_button_height)
-        if self.current_page > 0 : # Chỉ thêm zone nếu có thể quay lại
-            self.zones.append(("nav_prev_page_music", prev_page_rect))
-        
-        is_hovered_prev = prev_page_rect.contains(self.gaze_x, self.gaze_y) and self.current_page > 0
-        prev_page_color = QColor("#2ECC71").lighter(120) if is_hovered_prev else QColor("#2ECC71")
-        if self.current_page == 0: # Làm mờ nếu không thể nhấn
-            prev_page_color = QColor("#7f8c8d") # Màu xám
-        painter.fillRect(prev_page_rect, prev_page_color)
-        painter.setPen(QPen(prev_page_color.darker(120), 2))
-        painter.drawRect(prev_page_rect)
-        painter.setPen(Qt.white)
-        painter.setFont(font_back) # Dùng font to
-        painter.drawText(prev_page_rect, Qt.AlignCenter, "❮\nTrang\nTrước")
+        # === Nút quay về ===
+        back_rect = QRect(0, 0, w, 150)
+        self.zones.append(("nav_home_music", back_rect))
+        painter.setBrush(QColor(66, 165, 245, 255))
+        painter.setPen(Qt.NoPen)
+        painter.drawRect(back_rect)
 
-        # Nút Next Page (Bên phải)
-        next_page_rect = QRect(w - side_button_width, content_y_start, side_button_width, side_button_height)
-        if self.current_page < self.total_pages - 1: # Chỉ thêm zone nếu có thể tiến
-            self.zones.append(("nav_next_page_music", next_page_rect))
+        is_hovered = back_rect.contains(self.gaze_x, self.gaze_y)
+        if is_hovered:
+            painter.setBrush(QColor(0, 0, 255, 255))
+            painter.setPen(Qt.NoPen)
+            painter.drawRect(back_rect)
+        icon_size = 150
+        icon_rect = QRect(
+            back_rect.center().x() - icon_size // 2,
+            back_rect.center().y() - icon_size // 2,
+            icon_size, icon_size
+        )
+        painter.drawPixmap(icon_rect, back_icon.scaled(icon_rect.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation))
 
-        is_hovered_next = next_page_rect.contains(self.gaze_x, self.gaze_y) and self.current_page < self.total_pages - 1
-        next_page_color = QColor("#2ECC71").lighter(120) if is_hovered_next else QColor("#2ECC71")
-        if self.current_page >= self.total_pages - 1: # Làm mờ nếu không thể nhấn
-             next_page_color = QColor("#7f8c8d") # Màu xám
-        painter.fillRect(next_page_rect, next_page_color)
-        painter.setPen(QPen(next_page_color.darker(120), 2))
-        painter.drawRect(next_page_rect)
-        painter.setPen(Qt.white)
-        painter.setFont(font_back) # Dùng font to
-        painter.drawText(next_page_rect, Qt.AlignCenter, "❯\nTrang\nSau")
+        # === Nút chuyển trang trái ===
+        left_rect = QRect(0, back_rect.bottom(), 150, h - back_rect.height())
+        self.zones.append(("nav_prev_page_music", left_rect))
+        if left_rect.contains(self.gaze_x, self.gaze_y):
+            painter.setBrush(QColor(255, 255, 255, 40))
+            painter.setPen(Qt.NoPen)
+            painter.drawRect(left_rect)
+        icon_l = QRect(left_rect.center().x() - 25, left_rect.center().y() - 25, 50, 50)
+        painter.drawPixmap(icon_l, left_icon.scaled(icon_l.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation))
 
+        # === Nút chuyển trang phải ===
+        right_rect = QRect(w - left_rect.width(), back_rect.bottom(), left_rect.width(), h - back_rect.height())
+        self.zones.append(("nav_next_page_music", right_rect))
+        if right_rect.contains(self.gaze_x, self.gaze_y):
+            painter.setBrush(QColor(255, 255, 255, 40))
+            painter.setPen(Qt.NoPen)
+            painter.drawRect(right_rect)
+        icon_r = QRect(right_rect.center().x() - 25, right_rect.center().y() - 25, 50, 50)
+        painter.drawPixmap(icon_r, right_icon.scaled(icon_r.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation))
 
-        # --- Khu vực nội dung chính (ở giữa) ---
-        central_content_x = side_button_width
-        central_content_width = w - 2 * side_button_width
-        
-        # --- 3. Ba ô bài nhạc (ở trên khu vực trung tâm) ---
-        track_button_y = content_y_start
-        track_button_area_height = int(h * 0.35) # Tăng chiều cao khu vực này
-        
-        num_display_tracks = self.tracks_per_page
-        track_button_width = (central_content_width - (num_display_tracks + 1) * margin) // num_display_tracks
-        track_button_height = track_button_area_height - margin # Để có khoảng trống
+        # === Vẽ các bài hát ===
+        usable_w = w - left_rect.width() - right_rect.width()
+        usable_h = h - back_rect.height()
+        center_x = left_rect.width()
+        content_top = back_rect.bottom() + margin
+        item_w = (usable_w - 4 * margin) // 3
+        item_h = int(usable_h * 0.6)
 
         font_music = QFont("Arial", 14)
-        
-        start_track_idx = self.current_page * self.tracks_per_page
-        for i in range(num_display_tracks):
-            actual_track_idx = start_track_idx + i
-            if actual_track_idx >= len(self.music_track_names):
-                break # Không còn bài hát để hiển thị trên trang này
 
-            track_name = self.music_track_names[actual_track_idx]
-            track_x = central_content_x + margin + i * (track_button_width + margin)
-            track_rect = QRect(track_x, track_button_y, track_button_width, track_button_height)
-            self.zones.append((f"musictrack_{actual_track_idx}", track_rect)) # Sử dụng global index
+        start_idx = self.current_page * self.tracks_per_page
+        for i in range(3):
+            idx = start_idx + i
+            if idx >= len(self.music_track_names):
+                break
+            x = center_x + margin + i * (item_w + margin)
+            rect = QRect(x, content_top, item_w, item_h)
+            self.zones.append((f"musictrack_{idx}", rect))
 
-            is_hovered_track = track_rect.contains(self.gaze_x, self.gaze_y)
-            track_color_base = QColor("#1ABC9C")
-            track_color = track_color_base.lighter(120) if is_hovered_track else track_color_base
-            
-            painter.setBrush(track_color)
-            painter.setPen(QPen(track_color_base.darker(120), 2))
-            painter.drawRoundedRect(track_rect, 10, 10)
-            painter.setPen(Qt.white)
+            if rect.contains(self.gaze_x, self.gaze_y):
+                painter.setBrush(QColor(255, 255, 255, 40))
+                painter.setPen(Qt.NoPen)
+                painter.drawRoundedRect(rect, 20, 20)
+
+            icon_size = item_h // 2
+            icon_rect = QRect(rect.center().x() - icon_size // 2, rect.top() + 10, icon_size, icon_size)
+            painter.drawPixmap(icon_rect, music_icon.scaled(icon_rect.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation))
+
+            text_rect = QRect(rect.left(), icon_rect.bottom() + 10, rect.width(), 40)
             painter.setFont(font_music)
-            painter.drawText(track_rect.adjusted(5,5,-5,-5), Qt.AlignCenter | Qt.TextWordWrap, track_name)
+            painter.setPen(Qt.white)
+            painter.drawText(text_rect, Qt.AlignCenter, self.music_track_names[idx])
 
-        # --- 4. Tên bài hát đang phát (dưới 3 ô bài nhạc) ---
-        current_song_label_y = track_button_y + track_button_area_height + margin // 2
-        current_song_label_height = int(h * 0.1)
-        current_song_rect = QRect(central_content_x, current_song_label_y, 
-                                  central_content_width, current_song_label_height)
-        painter.setPen(QColor("#ECF0F1")) # Màu chữ sáng
-        font_current_song = QFont("Arial", 16, QFont.Bold)
-        painter.setFont(font_current_song)
-        painter.drawText(current_song_rect, Qt.AlignCenter, f"Đang phát: {self.current_playing_track_name}")
-
-        # --- 5. Thanh tiến trình (dưới tên bài hát) ---
-        progress_bar_y = current_song_label_y + current_song_label_height 
-        progress_bar_height = int(h * 0.05) # Thanh mỏng hơn
-        progress_bar_rect_outer = QRect(central_content_x + margin, progress_bar_y, 
-                                    central_content_width - 2 * margin, progress_bar_height)
-        
-        # Vẽ nền thanh tiến trình
-        painter.setBrush(QColor("#7F8C8D")) # Xám đậm
-        painter.setPen(Qt.NoPen)
-        painter.drawRoundedRect(progress_bar_rect_outer, 5, 5)
-
-        # Vẽ phần tiến trình đã chạy
-        # (Giả sử self.current_media_progress là từ 0.0 đến 1.0)
-        filled_width = int(progress_bar_rect_outer.width() * self.current_media_progress)
-        progress_bar_rect_inner = QRect(progress_bar_rect_outer.x(), progress_bar_rect_outer.y(),
-                                    filled_width, progress_bar_rect_outer.height())
-        painter.setBrush(QColor("#F39C12")) # Màu cam cho tiến trình
-        painter.drawRoundedRect(progress_bar_rect_inner, 5, 5)
-
-
-        # --- 6. Nút Pause/Play (Chính giữa, dưới thanh tiến trình) ---
-        play_pause_y = progress_bar_y + progress_bar_height + margin
-        play_pause_button_height = int(h * 0.15) # To hơn chút
-        play_pause_button_width = int(central_content_width * 0.4)
-        play_pause_x = central_content_x + (central_content_width - play_pause_button_width) // 2
-        play_pause_rect = QRect(play_pause_x, play_pause_y, play_pause_button_width, play_pause_button_height)
-        self.zones.append(("toggle_play_pause_music", play_pause_rect))
-
-        is_hovered_play_pause = play_pause_rect.contains(self.gaze_x, self.gaze_y)
-        play_pause_text = "❚❚ Tạm dừng" if self.is_music_playing_ui_state else "▶ Phát nhạc"
-        play_pause_color_base = QColor("#E67E22") # Cam đậm hơn
-        play_pause_color = play_pause_color_base.lighter(120) if is_hovered_play_pause else play_pause_color_base
-        
-        painter.setBrush(play_pause_color)
-        painter.setPen(QPen(play_pause_color_base.darker(120), 2))
-        painter.drawRoundedRect(play_pause_rect, 15, 15)
+        # === Tên bài đang phát ===
+        song_rect = QRect(center_x + margin, content_top + item_h + 30, usable_w - 2 * margin, 40)
+        painter.setFont(QFont("Arial", 16, QFont.Bold))
         painter.setPen(Qt.white)
-        font_play_pause = QFont("Arial", 18, QFont.Bold)
-        painter.setFont(font_play_pause)
-        painter.drawText(play_pause_rect, Qt.AlignCenter, play_pause_text)
-        
-        # --- Thông tin trang hiện tại ---
-        page_info_y = h - margin - 20 # Gần cuối màn hình
-        page_info_rect = QRect(central_content_x, page_info_y, central_content_width, 20)
-        painter.setPen(QColor("#BDC3C7")) # Xám nhạt
-        font_page_info = QFont("Arial", 12)
-        painter.setFont(font_page_info)
-        painter.drawText(page_info_rect, Qt.AlignCenter, f"Trang {self.current_page + 1} / {self.total_pages}")
+        painter.drawText(song_rect, Qt.AlignCenter, self.current_playing_track_name)
+
+        # === Thanh tiến trình ===
+        bar_h = 20
+        bar_rect = QRect(song_rect.left(), song_rect.bottom() + 10, song_rect.width(), bar_h)
+        painter.setBrush(QColor("#7f8c8d"))
+        painter.setPen(Qt.NoPen)
+        painter.drawRoundedRect(bar_rect, 10, 10)
+
+        filled = int(bar_rect.width() * self.current_media_progress)
+        fill_rect = QRect(bar_rect.left(), bar_rect.top(), filled, bar_h)
+        painter.setBrush(QColor("#f39c12"))
+        painter.drawRoundedRect(fill_rect, 10, 10)
+
+        # === Nút play/pause ===
+        btn_size = 200
+        btn_rect = QRect(left_rect.width(), bar_rect.bottom() + 30, usable_w, btn_size)
+        self.zones.append(("toggle_play_pause_music", btn_rect))
+
+        hovered = btn_rect.contains(self.gaze_x, self.gaze_y)
+
+        icon = (
+            pause_hover if self.is_music_playing_ui_state and hovered
+            else pause_icon if self.is_music_playing_ui_state
+            else play_hover if hovered
+            else play_icon
+        )
+
+        if hovered:
+            painter.setBrush(QColor(255, 255, 255, 40))
+            painter.setPen(Qt.NoPen)
+            painter.drawRoundedRect(btn_rect, 20, 20)
+
+        scaled_icon = icon.scaled(
+            btn_rect.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation
+        )
+
+        x = btn_rect.x() + (btn_rect.width() - scaled_icon.width()) // 2
+        y = btn_rect.y() + (btn_rect.height() - scaled_icon.height()) // 2
+        painter.drawPixmap(x, y, scaled_icon)
 
 
-        # === ĐIỂM NHÌN và DWELL PROGRESS === (Giữ nguyên từ code gốc của bạn)
+        # === Gaze Point và Dwell vòng tròn ===
         if self.gaze_x >= 0 and self.gaze_y >= 0:
             painter.setBrush(QColor(255, 0, 0, 180)) 
             painter.setPen(Qt.NoPen)
-            painter.drawEllipse(int(self.gaze_x) - 8, int(self.gaze_y) - 8, 16, 16)
+            painter.drawEllipse(self.gaze_x - 8, self.gaze_y - 8, 16, 16)
             painter.setPen(QPen(Qt.white, 2))
             painter.setBrush(Qt.NoBrush)
-            painter.drawEllipse(int(self.gaze_x) - 10, int(self.gaze_y) - 10, 20, 20)
+            painter.drawEllipse(self.gaze_x - 10, self.gaze_y - 10, 20, 20)
 
-            if self.current_zone is not None and not self.zone_activated and self.dwell_start_time is not None:
-                dwell_time_elapsed = time.time() - self.dwell_start_time
-                if dwell_time_elapsed < self.dwell_threshold:
-                    progress = dwell_time_elapsed / self.dwell_threshold
+            if self.current_zone and not self.zone_activated and self.dwell_start_time:
+                progress = (time.time() - self.dwell_start_time) / self.dwell_threshold
+                if progress < 1:
                     painter.setPen(QPen(Qt.cyan, 3))
-                    painter.drawArc(
-                        int(self.gaze_x) - 15, int(self.gaze_y) - 15,
-                        30, 30, 0, int(progress * 360 * 16)
-                    )
+                    painter.drawArc(self.gaze_x - 15, self.gaze_y - 15, 30, 30, 0, int(progress * 360 * 16))
+
         self.check_gaze_zone()
 
 
@@ -274,15 +248,11 @@ class MusicMenuWidget(QWidget):
         elif zone_name == "toggle_play_pause_music":
             self.toggle_play_pause_requested.emit()
         elif zone_name == "nav_next_page_music":
-            if self.current_page < self.total_pages - 1:
-                self.current_page += 1
-                self.update() # Yêu cầu vẽ lại để hiển thị trang mới
-                # self.next_page_requested.emit() # Nếu muốn xử lý bên ngoài
+            self.current_page = (self.current_page + 1) % self.total_pages
+            self.update()
         elif zone_name == "nav_prev_page_music":
-            if self.current_page > 0:
-                self.current_page -= 1
-                self.update() # Yêu cầu vẽ lại
-                # self.prev_page_requested.emit() # Nếu muốn xử lý bên ngoài
+            self.current_page = (self.current_page - 1 + self.total_pages) % self.total_pages
+            self.update()
         elif zone_name.startswith("musictrack_"):
             try:
                 # Tên zone giờ là global index, ví dụ "musictrack_0", "musictrack_1", ...

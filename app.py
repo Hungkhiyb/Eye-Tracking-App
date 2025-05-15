@@ -143,13 +143,13 @@ class EyeTrackingControlApp(QMainWindow):
             # Thêm các tên bài hát khác nếu bạn có file mp3 tương ứng
         ]
         self.music_files_paths = [
-            "Let Her Go.mp3",
-            "Me And My Broken Heart.mp3",
-            "Maps.mp3",
-            "Dangerously.mp3",
-            "Counting Stars.mp3", # Đảm bảo file này tồn tại
-            "Payphone.mp3",       # Đảm bảo file này tồn tại
-            "Sugar.mp3"           # Đảm bảo file này tồn tại
+            "musics/Let Her Go.mp3",
+            "musics/Me And My Broken Heart.mp3",
+            "musics/Maps.mp3",
+            "musics/Dangerously.mp3",
+            "musics/Counting Stars.mp3", # Đảm bảo file này tồn tại
+            "musics/Payphone.mp3",       # Đảm bảo file này tồn tại
+            "musics/Sugar.mp3"           # Đảm bảo file này tồn tại
             # Thêm đường dẫn file mp3 tương ứng
         ]
 
@@ -714,24 +714,21 @@ class EyeTrackingControlApp(QMainWindow):
     def handle_media_player_state_change(self, state):
         """Xử lý khi trạng thái media player thay đổi, ví dụ khi nhạc tự hết."""
         if state == QMediaPlayer.StoppedState:
-            # Nhạc đã dừng (có thể do tự hết bài hoặc do gọi stop())
-            # Nếu không phải do người dùng chủ động pause trước đó (và sau đó stop)
             if not self.is_music_explicitly_paused and self.current_playing_music_idx != -1:
                 print(f"Bài hát '{self.music_display_names[self.current_playing_music_idx]}' đã kết thúc.")
-                # Reset UI
+                # Reset UI bài hiện tại
                 self.music_menu_widget.set_playing_indicator(False)
                 self.music_menu_widget.set_current_playing_track_info(
-                    track_name="Chưa có bài hát nào đang phát", # Hoặc tên bài vừa hết
-                    progress=1.0 # Hoặc 0.0 nếu muốn reset hoàn toàn
+                    track_name="Chưa có bài hát nào đang phát",
+                    progress=1.0
                 )
-                # self.current_playing_music_idx = -1 # Tùy bạn muốn giữ lại bài cuối hay không
-                # self.is_music_explicitly_paused = False # Reset
+                # Tự động phát bài tiếp theo
+                self.play_next_track()
         elif state == QMediaPlayer.PlayingState:
             self.music_menu_widget.set_playing_indicator(True)
             self.is_music_explicitly_paused = False
         elif state == QMediaPlayer.PausedState:
             self.music_menu_widget.set_playing_indicator(False)
-            # không set is_music_explicitly_paused ở đây vì có thể do hệ thống pause
                 
     def map_gaze_to_screen(self):
         """Map gaze coordinates from camera frame to screen coordinates"""
@@ -928,6 +925,13 @@ class EyeTrackingControlApp(QMainWindow):
         self.music_menu_widget.current_zone = None
         self.music_menu_widget.dwell_start_time = time.time()
 
+    def play_next_track(self):
+        """Phát bài hát tiếp theo trong danh sách"""
+        if not self.music_files_paths:
+            return  # Không có bài hát nào
+
+        next_idx = (self.current_playing_music_idx + 1) % len(self.music_files_paths)
+        self.handle_music_selection(next_idx)
 
     # <<<<< HÀM XỬ LÝ TẠM DỪNG/TIẾP TỤC NHẠC >>>>>
     def handle_toggle_play_pause(self):
