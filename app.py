@@ -104,38 +104,95 @@ class EyeTrackingControlApp(QMainWindow):
         self.reading_viewer.back_to_menu.connect(self.open_reading_menu)
         self.stack.addWidget(self.reading_viewer)
 
-        # self.music_menu_widget = MusicMenuWidget() # Đổi tên biến để rõ ràng
+        # # <<<<< SETUP MUSIC MENU WIDGET >>>>>
+        # self.music_menu_widget = MusicMenuWidget()
         # self.music_menu_widget.back_to_home.connect(self.go_home)
-        # self.music_menu_widget.music_selected_for_play.connect(self.handle_music_selection) # Kết nối với hàm xử lý chọn nhạc
-        # self.music_menu_widget.stop_music_requested.connect(self.stop_current_music)      # Kết nối với hàm dừng nhạc
+        # self.music_menu_widget.music_selected_for_play.connect(self.handle_music_selection)
+        # # self.music_menu_widget.stop_music_requested.connect(self.stop_current_music) # Tín hiệu này không còn nữa
+        # self.music_menu_widget.toggle_play_pause_requested.connect(self.handle_toggle_play_pause) # <<<<< KẾT NỐI TÍN HIỆU MỚI
         # self.stack.addWidget(self.music_menu_widget)
-        # <<<<< SETUP MUSIC MENU WIDGET >>>>>
-        self.music_menu_widget = MusicMenuWidget()
-        self.music_menu_widget.back_to_home.connect(self.go_home)
-        self.music_menu_widget.music_selected_for_play.connect(self.handle_music_selection)
-        # self.music_menu_widget.stop_music_requested.connect(self.stop_current_music) # Tín hiệu này không còn nữa
-        self.music_menu_widget.toggle_play_pause_requested.connect(self.handle_toggle_play_pause) # <<<<< KẾT NỐI TÍN HIỆU MỚI
-        self.stack.addWidget(self.music_menu_widget)
 
-        # <<<<< MEDIAPLAYER SETUP >>>>>
-        self.media_player = QMediaPlayer(None, QMediaPlayer.StreamPlayback)
-        self.media_player.setVolume(70) # Hoặc âm lượng bạn muốn
-        # QUAN TRỌNG: Thay thế bằng đường dẫn thực tế đến các file nhạc của bạn
+        # # <<<<< MEDIAPLAYER SETUP >>>>>
+        # self.media_player = QMediaPlayer(None, QMediaPlayer.StreamPlayback)
+        # self.media_player.setVolume(70) # Hoặc âm lượng bạn muốn
+        # # QUAN TRỌNG: Thay thế bằng đường dẫn thực tế đến các file nhạc của bạn
+        # self.music_files_paths = [
+        #     "Let Her Go.mp3",
+        #     "Me And My Broken Heart.mp3",
+        #     "Maps.mp3",
+        #     "Dangerously.mp3"
+        # ]
+        # self.current_playing_music_idx = -1 # Index của bài hát đang phát
+
+        # # Kiểm tra sự tồn tại của file nhạc (tùy chọn nhưng nên có)
+        # for i, f_path in enumerate(self.music_files_paths):
+        #     if not os.path.exists(f_path):
+        #         print(f"Cảnh báo: File nhạc '{f_path}' (cho bài {i+1} trong MusicMenuWidget) không tồn tại.")
+
+        # self.current_playing_music_index = -1
+        # self.is_music_paused_by_user = False
+        
+        self.music_display_names = [
+            "Let Her Go - Passenger",
+            "Me And My Broken Heart - Rob Thomas",
+            "Maps - Maroon 5",
+            "Dangerously - Charlie Puth",
+            "Counting Stars - OneRepublic", # Thêm bài nếu có file
+            "Payphone - Maroon 5",         # Thêm bài nếu có file
+            "Sugar - Maroon 5"             # Thêm bài nếu có file
+            # Thêm các tên bài hát khác nếu bạn có file mp3 tương ứng
+        ]
         self.music_files_paths = [
             "Let Her Go.mp3",
             "Me And My Broken Heart.mp3",
             "Maps.mp3",
-            "Dangerously.mp3"
+            "Dangerously.mp3",
+            "Counting Stars.mp3", # Đảm bảo file này tồn tại
+            "Payphone.mp3",       # Đảm bảo file này tồn tại
+            "Sugar.mp3"           # Đảm bảo file này tồn tại
+            # Thêm đường dẫn file mp3 tương ứng
         ]
-        self.current_playing_music_idx = -1 # Index của bài hát đang phát
 
-        # Kiểm tra sự tồn tại của file nhạc (tùy chọn nhưng nên có)
+        # Kiểm tra sự tồn tại của file nhạc và đồng bộ hóa danh sách
+        # (Nếu file không tồn tại, có thể loại bỏ cả tên và đường dẫn)
+        valid_display_names = []
+        valid_file_paths = []
         for i, f_path in enumerate(self.music_files_paths):
-            if not os.path.exists(f_path):
-                print(f"Cảnh báo: File nhạc '{f_path}' (cho bài {i+1} trong MusicMenuWidget) không tồn tại.")
+            if os.path.exists(f_path):
+                valid_display_names.append(self.music_display_names[i])
+                valid_file_paths.append(f_path)
+            else:
+                print(f"Cảnh báo: File nhạc '{f_path}' (cho bài '{self.music_display_names[i]}') không tồn tại và sẽ bị bỏ qua.")
+        self.music_display_names = valid_display_names
+        self.music_files_paths = valid_file_paths
 
-        self.current_playing_music_index = -1
-        self.is_music_paused_by_user = False
+
+        # <<<<< SETUP MUSIC MENU WIDGET >>>>>
+        self.music_menu_widget = MusicMenuWidget(parent=self) # Truyền parent nếu cần
+        # Truyền danh sách tên bài hát cho MusicMenuWidget
+        self.music_menu_widget.music_track_names = self.music_display_names
+        self.music_menu_widget.total_pages = math.ceil(len(self.music_display_names) / self.music_menu_widget.tracks_per_page)
+        # Nếu music_menu_widget không tự tính total_pages, bạn cần cập nhật ở đây.
+        # Hoặc tốt hơn là để MusicMenuWidget tự tính toán lại total_pages khi music_track_names được set.
+
+        self.music_menu_widget.back_to_home.connect(self.go_home)
+        self.music_menu_widget.music_selected_for_play.connect(self.handle_music_selection)
+        self.music_menu_widget.toggle_play_pause_requested.connect(self.handle_toggle_play_pause)
+        self.stack.addWidget(self.music_menu_widget)
+
+        # <<<<< MEDIAPLAYER SETUP >>>>>
+        self.media_player = QMediaPlayer(None, QMediaPlayer.StreamPlayback)
+        self.media_player.setVolume(70)
+        self.current_playing_music_idx = -1 # Index của bài hát đang phát trong self.music_files_paths
+        self.is_music_explicitly_paused = False # Đổi tên từ is_music_paused_by_user để rõ nghĩa hơn
+
+        # Kết nối tín hiệu để cập nhật tiến trình nhạc
+        self.media_player.positionChanged.connect(self.update_music_progress_display)
+        self.media_player.durationChanged.connect(self.update_music_duration_for_progress_calc) # Để tính toán tỷ lệ
+        self.media_player.stateChanged.connect(self.handle_media_player_state_change) # Xử lý khi nhạc tự hết
+
+        # Biến để lưu trữ tổng thời lượng, giúp tính toán tiến trình
+        self.current_music_duration = 0
         
         
         # Setup top row for three zones
@@ -631,6 +688,50 @@ class EyeTrackingControlApp(QMainWindow):
                     current_widget.update_gaze(self.screen_gaze_x, self.screen_gaze_y)
 
 
+    def update_music_progress_display(self, position_ms):
+        """Cập nhật UI tiến trình nhạc trên music_menu_widget."""
+        if self.current_music_duration > 0:
+            progress_ratio = position_ms / self.current_music_duration
+            # Chỉ cập nhật nếu music_menu_widget đang hiển thị (tùy chọn để tối ưu)
+            # if self.stack.currentWidget() == self.music_menu_widget:
+            current_track_name = ""
+            if 0 <= self.current_playing_music_idx < len(self.music_display_names):
+                current_track_name = self.music_display_names[self.current_playing_music_idx]
+            
+            self.music_menu_widget.set_current_playing_track_info(
+                track_name=current_track_name, # Sử dụng tên đã lưu
+                progress=progress_ratio
+            )
+
+    def update_music_duration_for_progress_calc(self, duration_ms):
+        """Lưu lại tổng thời lượng của bài hát hiện tại."""
+        self.current_music_duration = duration_ms
+        # Có thể cần cập nhật lại progress display ngay nếu position đã có
+        current_position = self.media_player.position()
+        self.update_music_progress_display(current_position)
+
+
+    def handle_media_player_state_change(self, state):
+        """Xử lý khi trạng thái media player thay đổi, ví dụ khi nhạc tự hết."""
+        if state == QMediaPlayer.StoppedState:
+            # Nhạc đã dừng (có thể do tự hết bài hoặc do gọi stop())
+            # Nếu không phải do người dùng chủ động pause trước đó (và sau đó stop)
+            if not self.is_music_explicitly_paused and self.current_playing_music_idx != -1:
+                print(f"Bài hát '{self.music_display_names[self.current_playing_music_idx]}' đã kết thúc.")
+                # Reset UI
+                self.music_menu_widget.set_playing_indicator(False)
+                self.music_menu_widget.set_current_playing_track_info(
+                    track_name="Chưa có bài hát nào đang phát", # Hoặc tên bài vừa hết
+                    progress=1.0 # Hoặc 0.0 nếu muốn reset hoàn toàn
+                )
+                # self.current_playing_music_idx = -1 # Tùy bạn muốn giữ lại bài cuối hay không
+                # self.is_music_explicitly_paused = False # Reset
+        elif state == QMediaPlayer.PlayingState:
+            self.music_menu_widget.set_playing_indicator(True)
+            self.is_music_explicitly_paused = False
+        elif state == QMediaPlayer.PausedState:
+            self.music_menu_widget.set_playing_indicator(False)
+            # không set is_music_explicitly_paused ở đây vì có thể do hệ thống pause
                 
     def map_gaze_to_screen(self):
         """Map gaze coordinates from camera frame to screen coordinates"""
@@ -749,18 +850,47 @@ class EyeTrackingControlApp(QMainWindow):
             bg_color=QColor(200, 0, 0, 230) # Màu đỏ
         )    
     # <<<<< HÀM MỚI ĐỂ MỞ MUSIC MENU >>>>>
+    # def show_music_menu_action(self):
+    #     print("Opening Music Menu...")
+    #     # Cập nhật trạng thái nút play/pause trên music_menu_widget TRƯỚC KHI hiển thị
+    #     current_media_state = self.media_player.state()
+    #     is_playing_now = (current_media_state == QMediaPlayer.PlayingState)
+    #     self.music_menu_widget.set_playing_indicator(is_playing_now)
+        
+    #     self.stack.setCurrentWidget(self.music_menu_widget)
+    #     self.reset_zone_activation() 
+    #     self.music_menu_widget.current_zone = None
+    #     self.music_menu_widget.zone_activated = False
+    #     self.music_menu_widget.dwell_start_time = None
+    
     def show_music_menu_action(self):
         print("Opening Music Menu...")
         # Cập nhật trạng thái nút play/pause trên music_menu_widget TRƯỚC KHI hiển thị
         current_media_state = self.media_player.state()
         is_playing_now = (current_media_state == QMediaPlayer.PlayingState)
         self.music_menu_widget.set_playing_indicator(is_playing_now)
+
+        # Cập nhật thông tin bài hát và tiến trình đang phát
+        current_track_name_display = "Chưa có bài hát nào đang phát"
+        current_progress_display = 0.0
+        if 0 <= self.current_playing_music_idx < len(self.music_display_names):
+            current_track_name_display = self.music_display_names[self.current_playing_music_idx]
+            if self.current_music_duration > 0:
+                current_progress_display = self.media_player.position() / self.current_music_duration
+            else:
+                current_progress_display = 0.0 # Nếu chưa có duration
+
+        self.music_menu_widget.set_current_playing_track_info(
+            track_name=current_track_name_display,
+            progress=current_progress_display
+        )
         
         self.stack.setCurrentWidget(self.music_menu_widget)
-        self.reset_zone_activation() 
+        self.reset_zone_activation() # Reset zone của main layout
+        # Reset zone của music_menu_widget (để khi mở lại, không bị kẹt ở zone cũ)
         self.music_menu_widget.current_zone = None
         self.music_menu_widget.zone_activated = False
-        self.music_menu_widget.dwell_start_time = None
+        self.music_menu_widget.dwell_start_time = None # Hoặc time.time() nếu muốn bắt đầu dwell ngay
 
 
     # <<<<< HÀM XỬ LÝ KHI CHỌN BÀI HÁT TỪ MUSIC MENU >>>>>
@@ -786,7 +916,7 @@ class EyeTrackingControlApp(QMainWindow):
             self.is_music_explicitly_paused = False # Khi chọn bài mới, không phải do người dùng pause
             
             track_name = self.music_menu_widget.music_track_names[music_index]
-            QMessageBox.information(self, "Phát nhạc", f"Đang phát: {track_name}")
+            # QMessageBox.information(self, "Phát nhạc", f"Đang phát: {track_name}")
             print(f"Playing: {track_name} from {file_path}")
             self.music_menu_widget.set_playing_indicator(True) # Cập nhật UI
         else:
