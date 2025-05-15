@@ -1,8 +1,8 @@
 import os
 import sys
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
-                            QLabel, QPushButton, QComboBox, QSlider, QGroupBox, QHBoxLayout, QMessageBox, QStackedLayout)
-from PyQt5.QtCore import Qt, QTimer, QRect, QUrl
+                            QLabel, QPushButton, QComboBox, QSlider, QGroupBox, QHBoxLayout, QMessageBox, QStackedLayout, QGraphicsOpacityEffect)
+from PyQt5.QtCore import Qt, QTimer, QRect, QUrl, QPropertyAnimation, QEasingCurve
 from PyQt5.QtGui import QFont, QPalette, QColor, QImage, QPixmap, QPainter, QPen, QLinearGradient
 from PyQt5.QtMultimedia import QMediaPlayer, QMediaContent
 import cv2
@@ -19,6 +19,53 @@ from reading_viewer import ReadingViewerWidget
 
 from music_menu import MusicMenuWidget
 
+class CustomNotificationWidget(QLabel): # Đổi tên thành tên chung hơn
+    def __init__(self, text, parent=None, duration=2500, bg_color=QColor(0, 150, 200, 220)): # Thêm bg_color
+        super().__init__(text, parent)
+        self.setWindowFlags(Qt.SplashScreen | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setStyleSheet(f"""
+            QLabel {{
+                background-color: rgba({bg_color.red()}, {bg_color.green()}, {bg_color.blue()}, {bg_color.alpha()});
+                color: white;
+                font-size: 26px; /* Điều chỉnh font size nếu cần */
+                font-weight: bold;
+                padding: 20px; /* Padding hợp lý */
+                border-radius: 12px;
+                border: 1px solid rgba(255, 255, 255, 100); /* Viền trắng mờ */
+            }}
+        """)
+        self.setAlignment(Qt.AlignCenter)
+        self.adjustSize() # Điều chỉnh kích thước theo nội dung
+
+        # Hiệu ứng Opacity
+        self.opacity_effect = QGraphicsOpacityEffect(self)
+        self.setGraphicsEffect(self.opacity_effect)
+
+        # Tự động đóng sau một khoảng thời gian
+        QTimer.singleShot(duration, self.close_smoothly)
+
+    def show_centered_with_animation(self): # Đổi tên hàm
+        if self.parentWidget():
+            parent_rect = self.parentWidget().geometry()
+            self.move(parent_rect.center() - self.rect().center())
+        
+        self.animation_in = QPropertyAnimation(self.opacity_effect, b"opacity")
+        self.animation_in.setDuration(300) # Thời gian hiện ra
+        self.animation_in.setStartValue(0.0)
+        self.animation_in.setEndValue(1.0) # Độ mờ cuối cùng
+        self.animation_in.setEasingCurve(QEasingCurve.InOutQuad)
+        self.animation_in.start()
+        self.show() # Hiển thị widget
+
+    def close_smoothly(self):
+        self.animation_out = QPropertyAnimation(self.opacity_effect, b"opacity")
+        self.animation_out.setDuration(500) # Thời gian mờ đi
+        self.animation_out.setStartValue(1.0)
+        self.animation_out.setEndValue(0.0)
+        self.animation_out.setEasingCurve(QEasingCurve.InOutQuad)
+        self.animation_out.finished.connect(self.deleteLater) # Xóa widget sau khi animation kết thúc
+        self.animation_out.start()
 class EyeTrackingControlApp(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -31,6 +78,8 @@ class EyeTrackingControlApp(QMainWindow):
         if not self.cap.isOpened():
             print("Cannot open camera")
             sys.exit()
+        self.active_custom_notification_ref = None
+        
 
         # Setup main layout
         self.central_widget = QWidget()
@@ -256,6 +305,7 @@ class EyeTrackingControlApp(QMainWindow):
         """Define the interaction zones and their actions"""
         # Define zones - format: (name, action_callback, color)
         self.zones = [
+            
             ("Gọi người chăm sóc", self.call_caretaker, QColor("#ef5350")),  # đỏ nhạt
             ("Bật nhạc", self.show_music_menu_action, QColor("#66bb6a")), # Dòng mới
             ("Đọc sách", self.read_book, QColor("#42a5f5")),                 # xanh dương
@@ -646,86 +696,58 @@ class EyeTrackingControlApp(QMainWindow):
 
         self.debug_label.setText(debug_text)
 
-        
+    def app_show_custom_notification(self, message, duration=2500, bg_color=QColor(0,150,200,210)):
+        """Hiển thị một thông báo tùy chỉnh không chặn."""
+        # Bước 1: Nếu có thông báo cũ đang hiển thị, yêu cầu nó đóng lại.
+        # Không gán self.active_custom_notification_ref = None ngay ở đây.
+        if self.active_custom_notification_ref and self.active_custom_notification_ref.isVisible():
+            # print(f"DEBUG: Yêu cầu đóng thông báo cũ: {self.active_custom_notification_ref}")
+            self.active_custom_notification_ref.close_smoothly()
+            # Không nên truy cập self.active_custom_notification_ref nữa sau khi gọi close_smoothly
+            # cho đến khi nó thực sự bị deleteLater hoặc bạn tạo cái mới.
+            # Chúng ta sẽ tạo cái mới ngay sau đây, ghi đè lên tham chiếu cũ.
+
+        # Bước 2: Tạo thông báo mới và lưu tham chiếu mới.
+        new_notification = CustomNotificationWidget(
+            message,
+            parent=self,
+            duration=duration,
+            bg_color=bg_color
+        )
+        new_notification.show_centered_with_animation()
+        self.active_custom_notification_ref = new_notification # Cập nhật tham chiếu
     # Zone action callbacks
     def call_caretaker(self):
-        """Action for 'Gọi người chăm sóc' zone"""
-        QMessageBox.information(self, "Thông báo", "Đã gọi người chăm sóc!")
-        # Reset zone activation after a short delay
-        QTimer.singleShot(500, self.reset_zone_activation)
-        
-    # def play_music(self):
-    #     """Action for 'Bật nhạc' zone"""
-    #     QMessageBox.information(self, "Thông báo", "Đang bật nhạc!")
-    #     # Reset zone activation after a short delay
-    #     QTimer.singleShot(500, self.reset_zone_activation)
-    # def show_music_menu_action(self):
-    #     print("Opening Music Menu...")
-    #     self.stack.setCurrentWidget(self.music_menu_widget)
-    #     # Reset zone của main window để không bị kẹt khi quay lại
-    #     self.reset_zone_activation() # Gọi hàm reset_zone_activation của bạn
-    #     # Reset zone của music_menu_widget khi nó được hiển thị
-    #     self.music_menu_widget.current_zone = None
-    #     self.music_menu_widget.zone_activated = False
-    #     self.music_menu_widget.dwell_start_time = None
+        """Action for 'Gọi người chăm sóc' zone - Sử dụng thông báo tùy chỉnh."""
+        print("App: Kích hoạt Gọi người chăm sóc!")
+
+        if hasattr(self, 'app_reset_main_zone_after_action'):
+             self.app_reset_main_zone_after_action(switch_widget=False)
+        else:
+             self.reset_zone_activation()
+
+        self.app_show_custom_notification(
+            "Đã gửi yêu cầu gọi người chăm sóc!",
+            duration=3000,
+            bg_color=QColor(46, 204, 113, 220) # Màu xanh lá cây
+        )
+        # (Tùy chọn) self.app_send_actual_caretaker_request_signal()
 
 
-    # # <<<<< HÀM XỬ LÝ KHI CHỌN BÀI HÁT TỪ MUSIC MENU >>>>>
-    # def handle_music_selection(self, music_index):
-    #     if not (0 <= music_index < len(self.music_files_paths)):
-    #         QMessageBox.warning(self, "Lỗi nhạc", "Index bài hát không hợp lệ.")
-    #         # Reset zone của music_menu_widget
-    #         self.music_menu_widget.zone_activated = False
-    #         self.music_menu_widget.current_zone = None
-    #         self.music_menu_widget.dwell_start_time = time.time()
-    #         return
+    def emergency(self):
+        """Action for 'SOS' zone - Sử dụng thông báo tùy chỉnh không chặn (ĐÃ SỬA)."""
+        print("App: Kích hoạt SOS!")
 
-    #     file_path = self.music_files_paths[music_index]
-    #     if file_path and os.path.exists(file_path):
-    #         url = QUrl.fromLocalFile(file_path)
-    #         content = QMediaContent(url)
-            
-    #         # Dừng bài hát hiện tại nếu có và khác bài mới
-    #         if self.media_player.state() != QMediaPlayer.StoppedState and self.current_playing_music_idx != music_index:
-    #             self.media_player.stop()
+        if hasattr(self, 'app_reset_main_zone_after_action'):
+             self.app_reset_main_zone_after_action(switch_widget=False)
+        else:
+             self.reset_zone_activation()
 
-    #         self.media_player.setMedia(content)
-    #         self.media_player.play()
-    #         self.current_playing_music_idx = music_index
-    #         # Lấy tên bài hát từ music_menu_widget để hiển thị (nếu cần)
-    #         track_name = "Bài hát không rõ tên"
-    #         if hasattr(self.music_menu_widget, 'music_track_names') and \
-    #         0 <= music_index < len(self.music_menu_widget.music_track_names):
-    #             track_name = self.music_menu_widget.music_track_names[music_index]
-
-    #         QMessageBox.information(self, "Phát nhạc", f"Đang phát: {track_name}")
-    #         print(f"Playing: {track_name} from {file_path}")
-    #     else:
-    #         QMessageBox.warning(self, "Lỗi nhạc", f"Không tìm thấy file cho bài hát đã chọn:\n{file_path}")
-    #         self.current_playing_music_idx = -1
-        
-    #     # Reset zone của music_menu_widget để tránh kích hoạt lại ngay
-    #     self.music_menu_widget.zone_activated = False
-    #     self.music_menu_widget.current_zone = None 
-    #     self.music_menu_widget.dwell_start_time = time.time()
-
-
-    # # <<<<< HÀM DỪNG NHẠC >>>>>
-    # def stop_current_music(self):
-    #     if self.media_player.state() == QMediaPlayer.PlayingState or \
-    #     self.media_player.state() == QMediaPlayer.PausedState:
-    #         self.media_player.stop()
-    #         QMessageBox.information(self, "Dừng nhạc", "Đã dừng phát nhạc.")
-    #         print("Music stopped by user.")
-    #         self.current_playing_music_idx = -1
-    #     else:
-    #         QMessageBox.information(self, "Thông báo", "Không có nhạc nào đang phát để dừng.")
-        
-    #     # Reset zone của music_menu_widget
-    #     self.music_menu_widget.zone_activated = False
-    #     self.music_menu_widget.current_zone = None
-    #     self.music_menu_widget.dwell_start_time = time.time() 
-    
+        self.app_show_custom_notification(
+            "ĐÃ GỬI TÍN HIỆU KHẨN CẤP!",
+            duration=3500,
+            bg_color=QColor(200, 0, 0, 230) # Màu đỏ
+        )    
     # <<<<< HÀM MỚI ĐỂ MỞ MUSIC MENU >>>>>
     def show_music_menu_action(self):
         print("Opening Music Menu...")
@@ -827,11 +849,6 @@ class EyeTrackingControlApp(QMainWindow):
         self.current_zone = None
         self.dwell_start_time = time.time()
         
-    def emergency(self):
-        """Action for 'SOS' zone"""
-        QMessageBox.critical(self, "KHẨN CẤP", "ĐÃ GỬI TÍN HIỆU KHẨN CẤP!")
-        # Reset zone activation after a short delay
-        QTimer.singleShot(500, self.reset_zone_activation)
     
     def reset_zone_activation(self):
         """Reset zone activation to allow reactivation"""
@@ -854,6 +871,10 @@ class EyeTrackingControlApp(QMainWindow):
         content = articles[index] if index < len(articles) else "Bài viết đang được cập nhật..."
         self.reading_viewer.load_article(content)
         self.stack.setCurrentWidget(self.reading_viewer)
+        if hasattr(self.reading_menu,'zone_activated'): # << Logic này đúng cho reading_menu
+            self.reading_menu.zone_activated = False
+            self.reading_menu.current_zone=None
+            self.reading_menu.dwell_start_time=time.perf_counter()
 
     def go_home(self):
         self.stack.setCurrentWidget(self.main_control_widget)
