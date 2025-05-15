@@ -1,17 +1,21 @@
 import sys
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
-                            QLabel, QPushButton, QComboBox, QSlider, QGroupBox, QHBoxLayout, QMessageBox)
+                            QLabel, QPushButton, QComboBox, QSlider, QGroupBox, QHBoxLayout, QMessageBox, QStackedLayout)
 from PyQt5.QtCore import Qt, QTimer, QRect
 from PyQt5.QtGui import QFont, QPalette, QColor, QImage, QPixmap, QPainter, QPen, QLinearGradient
 import cv2
 import numpy as np
 import torch
 import mediapipe as mp
-from train import GazeDualHeadMLP
+from model.train import GazeDualHeadMLP
 from joblib import load
 import pyautogui
 import math
 import time
+import os
+from reading_menu import ReadingMenuWidget
+from reading_viewer import ReadingViewerWidget
+
 
 class EyeTrackingControlApp(QMainWindow):
     def __init__(self):
@@ -29,9 +33,25 @@ class EyeTrackingControlApp(QMainWindow):
         # Setup main layout
         self.central_widget = QWidget()
         self.setCentralWidget(self.central_widget)
-        self.main_layout = QVBoxLayout(self.central_widget)
+        self.stack = QStackedLayout()
+        self.central_widget.setLayout(self.stack)
+        self.main_control_widget = QWidget()
+        self.main_layout = QVBoxLayout(self.main_control_widget)
         self.main_layout.setContentsMargins(10, 10, 10, 10)
         self.main_layout.setSpacing(10)
+        self.stack.addWidget(self.main_control_widget)
+
+        # Setup reading menu
+        self.reading_menu = ReadingMenuWidget()
+        self.reading_menu.article_selected.connect(self.open_article)
+        self.reading_menu.back_to_home.connect(self.go_home)
+        self.reading_menu.turn_page.connect(self.turn_page)
+        self.stack.addWidget(self.reading_menu)
+
+        # Setup reading viewer
+        self.reading_viewer = ReadingViewerWidget()
+        self.reading_viewer.back_to_menu.connect(self.open_reading_menu)
+        self.stack.addWidget(self.reading_viewer)
 
         # Setup top row for three zones
         self.top_row = QWidget()
@@ -131,12 +151,12 @@ class EyeTrackingControlApp(QMainWindow):
         self.CAMERA_HEIGHT = 480
         
         # Load scalers and model
-        self.scaler_input = load('scaler_input.joblib')
-        self.scaler_target = load('scaler_target.joblib')
+        self.scaler_input = load('model/scaler_input.joblib')
+        self.scaler_target = load('model/scaler_target.joblib')
         
         input_size = self.scaler_input.n_features_in_
         self.model = GazeDualHeadMLP(input_size=input_size)
-        self.model.load_state_dict(torch.load('gaze_model.pth', map_location='cpu'))
+        self.model.load_state_dict(torch.load('model/gaze_model.pth', map_location='cpu'))
         self.model.eval()
         
         # MediaPipe face mesh
@@ -197,100 +217,71 @@ class EyeTrackingControlApp(QMainWindow):
         }
         
     def setup_interaction_zones(self):
-        """Define the interaction zones and their actions"""
-        # Define zones - format: (name, action_callback, color)
         self.zones = [
-            ("Gọi người chăm sóc", self.call_caretaker, QColor("#ef5350")),  # đỏ nhạt
-            ("Bật nhạc", self.play_music, QColor("#66bb6a")),                # xanh lá
-            ("Đọc sách", self.read_book, QColor("#42a5f5")),                 # xanh dương
-            ("SOS", self.emergency, QColor("#d32f2f")),                      # đỏ đậm
-            ("", None, QColor("#424242")),                                   # xám
-            ("", None, QColor("#424242")),                                   # xám
+            ("Đọc sách", self.read_book, "assets/reading_icon.png"),
+            ("Bật nhạc", self.play_music, "assets/music_icon.png")
         ]
-
-        
-        # Zone rectangles will be calculated during paintEvent based on window size
         
     def paintEvent(self, event):
         painter = QPainter(self)
-
-        # Get window dimensions
         window_width = self.width()
         window_height = self.height()
 
-        # Zone size
-        zone_width = (window_width - 40) // 3
-        zone_height = (window_height - 40) // 2
+        zone_width = window_width // 2
+        zone_height = window_height
 
         self.zone_rects = []
 
-        for i, (name, _, color) in enumerate(self.zones):
-            row = i // 3
-            col = i % 3
-
-            x = 10 + col * (zone_width + 10)
-            y = 10 + row * (zone_height + 10)
-
+        for i, (name, _, icon_path) in enumerate(self.zones):
+            x = i * zone_width
+            y = 0
             rect = QRect(x, y, zone_width, zone_height)
             self.zone_rects.append(rect)
 
-            # Gradient fill
-            gradient = QLinearGradient(rect.topLeft(), rect.bottomRight())
-            gradient.setColorAt(0, color.lighter(110))
-            gradient.setColorAt(1, color.darker(110))
-            painter.fillRect(rect, gradient)
-
-            # Draw base border
-            painter.setPen(QPen(Qt.black, 2))
-            painter.drawRect(rect)
-
-            # Highlight border if dwelling
+            # Nền trong suốt + hover xám nhạt
             if i == self.current_zone:
-                dwell_time = time.time() - self.dwell_start_time
-                if not self.zone_activated:
-                    progress = dwell_time / self.dwell_threshold
-                    pen_width = 4 + int(progress * 4)
-                    painter.setPen(QPen(Qt.cyan, pen_width))
-                else:
-                    painter.setPen(QPen(Qt.green, 6))
+                painter.setBrush(QColor(255, 255, 255, 40))  # xám nhạt
+                painter.setPen(Qt.NoPen)
                 painter.drawRect(rect)
 
-            # Draw name
-            if name:
-                painter.setPen(Qt.white)
-                font = QFont()
-                font.setPointSize(24)
-                font.setBold(True)
-                painter.setFont(font)
-                painter.drawText(rect, Qt.AlignCenter, name)
+            # Vẽ icon căn giữa
+            icon = QPixmap(icon_path)
+            icon_size = min(zone_width, zone_height) // 3
+            icon_rect = QRect(
+                rect.center().x() - icon_size // 2,
+                rect.center().y() - icon_size,
+                icon_size, icon_size
+            )
+            painter.drawPixmap(icon_rect, icon.scaled(icon_rect.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation))
 
-        # Draw gaze point
+            # Vẽ tên chức năng
+            text_rect = QRect(rect.left(), icon_rect.bottom() + 20, rect.width(), 60)
+            painter.setPen(Qt.white)
+            font = QFont("Arial", 24, QFont.Bold)
+            painter.setFont(font)
+            painter.drawText(text_rect, Qt.AlignCenter, name)
+
+        # Gaze point
         if hasattr(self, 'screen_gaze_x') and hasattr(self, 'screen_gaze_y'):
-            # Inner red circle
             painter.setBrush(QColor(255, 0, 0, 180))
             painter.setPen(Qt.NoPen)
-            painter.drawEllipse(int(self.screen_gaze_x) - 8, int(self.screen_gaze_y) - 8, 16, 16)
+            painter.drawEllipse(self.screen_gaze_x - 8, self.screen_gaze_y - 8, 16, 16)
 
-            # Outer white ring
             painter.setPen(QPen(Qt.white, 2))
             painter.setBrush(Qt.NoBrush)
-            painter.drawEllipse(int(self.screen_gaze_x) - 10, int(self.screen_gaze_y) - 10, 20, 20)
+            painter.drawEllipse(self.screen_gaze_x - 10, self.screen_gaze_y - 10, 20, 20)
 
-            # Draw dwell progress circle
+            # Dwell progress
             if self.current_zone is not None and not self.zone_activated:
                 dwell_time = time.time() - self.dwell_start_time
                 if dwell_time < self.dwell_threshold:
                     progress = dwell_time / self.dwell_threshold
                     painter.setPen(QPen(Qt.cyan, 3))
                     painter.drawArc(
-                        int(self.screen_gaze_x) - 15,
-                        int(self.screen_gaze_y) - 15,
-                        30, 30,
-                        0,
-                        int(progress * 360 * 16)
+                        self.screen_gaze_x - 15, self.screen_gaze_y - 15, 30, 30,
+                        0, int(progress * 360 * 16)
                     )
 
-        
     def get_point(self, face_landmarks, idx, frame_shape):
         h, w = frame_shape[:2]
         lm = face_landmarks.landmark[idx]
@@ -508,10 +499,19 @@ class EyeTrackingControlApp(QMainWindow):
                 self.map_gaze_to_screen()
                 
                 # Check if gaze is in an interaction zone
-                self.check_zone_interaction()
+                if self.stack.currentWidget() == self.main_control_widget:
+                    self.check_zone_interaction()
+
                 
                 # Update debug info
-                self.update_debug_info()
+                # self.update_debug_info()
+
+                # Truyền gaze point vào giao diện đang hiển thị (nếu có xử lý)
+                current_widget = self.stack.currentWidget()
+                if isinstance(current_widget, ReadingMenuWidget):
+                    current_widget.update_gaze(self.screen_gaze_x, self.screen_gaze_y)
+                elif isinstance(current_widget, ReadingViewerWidget):
+                    current_widget.update_gaze(self.screen_gaze_x, self.screen_gaze_y)
                 
     def map_gaze_to_screen(self):
         """Map gaze coordinates from camera frame to screen coordinates"""
@@ -562,18 +562,21 @@ class EyeTrackingControlApp(QMainWindow):
                 print(f"Activated zone: {zone_name}")
                 
     def update_debug_info(self):
-        """Update the debug information display"""
         debug_text = f"Gaze: ({int(self.screen_gaze_x)}, {int(self.screen_gaze_y)})\n"
-        
-        if self.current_zone is not None:
-            zone_name = self.zones[self.current_zone][0]
-            dwell_time = time.time() - self.dwell_start_time
-            debug_text += f"Zone: {zone_name}\n"
-            debug_text += f"Dwell: {dwell_time:.2f}s / {self.dwell_threshold:.2f}s"
+
+        if self.stack.currentWidget() == self.main_control_widget:
+            if self.current_zone is not None:
+                zone_name = self.zones[self.current_zone][0]
+                dwell_time = time.time() - self.dwell_start_time
+                debug_text += f"Zone: {zone_name}\n"
+                debug_text += f"Dwell: {dwell_time:.2f}s / {self.dwell_threshold:.2f}s"
+            else:
+                debug_text += "Zone: None"
         else:
-            debug_text += "Zone: None"
-            
+            debug_text += "Zone: (không trong layout chính)"
+
         self.debug_label.setText(debug_text)
+
         
     # Zone action callbacks
     def call_caretaker(self):
@@ -590,9 +593,10 @@ class EyeTrackingControlApp(QMainWindow):
         
     def read_book(self):
         """Action for 'Đọc sách' zone"""
-        QMessageBox.information(self, "Thông báo", "Mở ứng dụng đọc sách!")
-        # Reset zone activation after a short delay
-        QTimer.singleShot(500, self.reset_zone_activation)
+        self.stack.setCurrentWidget(self.reading_menu)
+        self.zone_activated = False
+        self.current_zone = None
+        self.dwell_start_time = time.time()
         
     def emergency(self):
         """Action for 'SOS' zone"""
@@ -610,6 +614,47 @@ class EyeTrackingControlApp(QMainWindow):
         """Clean up resources when closing the application"""
         self.cap.release()
         event.accept()
+
+    def open_article(self, index):
+        # Định nghĩa đường dẫn đến thư mục chứa các file bài báo
+        articles_dir = "articles"  # Thay đổi thành đường dẫn thực tế của bạn
+        article_files = [
+            "article_1.txt",
+            "article_2.txt",
+            "article_3.txt",
+            "article_4.txt"
+        ]
+        
+        content = "Bài viết đang được cập nhật..."
+        
+        # Kiểm tra index hợp lệ
+        if index < len(article_files):
+            file_path = os.path.join(articles_dir, article_files[index])
+            try:
+                # Đọc nội dung từ file txt với encoding UTF-8
+                with open(file_path, "r", encoding="utf-8") as file:
+                    content = file.read()
+            except Exception as e:
+                print(f"Lỗi khi đọc file: {e}")
+                content = "Lỗi: Không thể tải nội dung bài viết."
+        
+        self.reading_viewer.load_article(content)
+        self.stack.setCurrentWidget(self.reading_viewer)
+
+    def go_home(self):
+        self.stack.setCurrentWidget(self.main_control_widget)
+
+    def turn_page(self, direction):
+        print(f"Chuyển trang: {direction}")
+        # TODO: lật trang trong giao diện chọn bài
+
+    def open_reading_menu(self):
+        self.stack.setCurrentWidget(self.reading_menu)
+        # Reset trạng thái của reading_viewer
+        self.reading_viewer.gaze_x = -100
+        self.reading_viewer.gaze_y = -100
+        self.reading_viewer.zone_activated = False
+        self.reading_viewer.dwell_start_time = time.time()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
