@@ -90,10 +90,6 @@ class EyeTrackingControlApp(QMainWindow):
         self.central_widget.setLayout(self.stack)
         self.main_control_widget = QWidget()
         self.main_layout = QVBoxLayout(self.main_control_widget)
-        self.stack = QStackedLayout()
-        self.central_widget.setLayout(self.stack)
-        self.main_control_widget = QWidget()
-        self.main_layout = QVBoxLayout(self.main_control_widget)
         self.main_layout.setContentsMargins(10, 10, 10, 10)
         self.main_layout.setSpacing(10)
         self.stack.addWidget(self.main_control_widget)
@@ -316,11 +312,6 @@ class EyeTrackingControlApp(QMainWindow):
             min_detection_confidence=0.7,
             min_tracking_confidence=0.7
         )
-        
-        # Camera setup
-        self.cap = cv2.VideoCapture(0)
-        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.CAMERA_WIDTH)
-        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.CAMERA_HEIGHT)
 
         # ===== CẤU HÌNH CAMERA (phải khớp với feature_extraction.py) =====
         self.CAM_MTX = np.array([[950, 0, 640],
@@ -367,7 +358,7 @@ class EyeTrackingControlApp(QMainWindow):
     def setup_interaction_zones(self):
         self.zones = [
             ("Đọc sách", self.read_book, "assets/reading_icon.png"),
-            ("Bật nhạc", self.play_music, "assets/music_icon.png")
+            ("Bật nhạc", self.show_music_menu_action, "assets/music_icon.png")
         ]
         
     def paintEvent(self, event):
